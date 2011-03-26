@@ -65,6 +65,8 @@ class ResizedThumbnailNode(Node):
 
         if not MEDIA_STORAGE.exists(filename):
             thumb = Image.open(ContentFile(avatar.read()))
+            if thumb.mode != 'RGB':
+                thumb = thumb.convert('RGB')
             img_format = thumb.format
             if not CAN_ENLARGE_AVATAR or (thumb.size[0] > size or thumb.size[1] > size or not hasattr(thumb, 'resize')):
                 thumb.thumbnail((size, size), Image.ANTIALIAS)

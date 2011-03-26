@@ -20,7 +20,7 @@ from userprofile.forms import AvatarForm, AvatarCropForm, EmailValidationForm, \
     ProfileForm, _RegistrationForm, LocationForm, ResendEmailValidationForm
 from userprofile.models import BaseProfile, EmailValidation, Avatar
 from userprofile.settings import DEFAULT_AVATAR_SIZE, SAVE_IMG_PARAMS, \
-    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA
+    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA, USE_AWS_STORAGE_BACKEND
 from xml.dom import minidom
 import copy
 import os
@@ -234,6 +234,8 @@ def avatarchoose(request):
                 except:
                     messages.error(request, _("This image can't be used as an avatar"))
                 else:
+                    if thumb.mode != "RGB":
+                        thumb = thumb.convert("RGB")
                     thumb.thumbnail((480, 480), Image.ANTIALIAS)
                     f = StringIO()
                     try:
@@ -279,6 +281,8 @@ def avatarcrop(request):
         form = AvatarCropForm()
     else:
         image = Image.open(ContentFile(avatar.image.read()))
+        if image.mode != "RGB":
+            image = image.convert("RGB")
         form = AvatarCropForm(image, request.POST)
         if form.is_valid():
             top = int(form.cleaned_data.get('top'))
@@ -302,7 +306,7 @@ def avatarcrop(request):
             box = [ left, top, right, bottom ]
             image = image.crop(box)
 
-            if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
+            if USE_AWS_STORAGE_BACKEND:
                 f = StringIO()
                 image.save(f, image.format)
                 f.seek(0)
