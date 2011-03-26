@@ -64,6 +64,18 @@ CSS_CLASSES = {
         'overview_details':     'grid_6 omega',
         'overview_location':    'grid_6 alpha omega',
     },
+    # for "960gs" with 24 columns, full width
+    '960gs-24': {
+        'content_main_2col':    'grid_12 alpha prefix_1 suffix_1',
+        'content_related':      'grid_9 omega',
+        'content_main':         'grid_24 alpha omega',
+        'nav':                  'grid_24 alpha omega',
+        'public_vcard_content': 'grid_12 alpha',
+        'public_vcard_map':     'grid_12 omega',
+        'overview_avatar':      'grid_4 alpha',
+        'overview_details':     'grid_7 omega',
+        'overview_location':    'grid_16 alpha omega',
+    },
 }
 
 def css_classes(request):

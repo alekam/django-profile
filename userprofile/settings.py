@@ -51,6 +51,7 @@ else:
 #  - 960gs-12 (for 960.gs css framework, 12 columns, full width)
 #  - 960-gs-16 (for 960.gs, 16 columns, full width)
 #  - 960gs-12-in-9 (for 960.gs css, in a width of 9 columns, given as example)
+#  - 960gs-24 (for 960.gs css framework, 24 columns, full width)
 USERPROFILE_CSS_CLASSES = getattr(settings, 'USERPROFILE_CSS_CLASSES', 'blueprint')
 
 AUTH_PROFILE_MODULE = getattr(settings, 'AUTH_PROFILE_MODULE', None)

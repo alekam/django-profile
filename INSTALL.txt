@@ -182,6 +182,7 @@ variables on your own project "settings.py" file:
   - 960gs-12 (for 960.gs css framework, 12 columns, full width)
   - 960-gs-16 (for 960.gs, 16 columns, full width)
   - 960gs-12-in-9 (for 960.gs css, in a width of 9 columns, given as example)
+  - 960gs-24 (for 960.gs css framework, 24 columns, full width)
   You can specify one of these, or a entire dict for your own classes (see
   context_processors.py to see all keys))
 
