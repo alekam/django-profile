@@ -3,9 +3,11 @@
 # Countries list - ISO 3166-1993 (E)
 # http://xml.coverpages.org/country3166.html
 
+from django.core.exceptions import ValidationError
 from django.db.models.fields import CharField
-from django.utils.translation import ugettext_lazy as _, ugettext
 from django.template.defaultfilters import slugify
+from django.utils.translation import ugettext_lazy as _, ugettext
+
 
 COUNTRIES = [
     ('AD', _('Andorra')),
@@ -248,7 +250,7 @@ COUNTRIES = [
     ('ZW', _('Zimbabwe')),
 ]
 
-COUNTRIES.sort(lambda x,y:cmp(slugify(x[1]),slugify(y[1])))
+COUNTRIES.sort(lambda x, y:cmp(slugify(x[1]), slugify(y[1])))
 COUNTRIES.append(('ZZ', _('Unknown or unspecified country')))
 
 def isValidCountry(field_data, all_data):

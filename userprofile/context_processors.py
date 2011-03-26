@@ -1,5 +1,5 @@
 from django.contrib.sites.models import Site
-from django.conf import settings
+import settings
 import types
 
 def site(request):

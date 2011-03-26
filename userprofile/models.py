@@ -1,49 +1,23 @@
 # coding=UTF-8
-from django.db import models
-from django.contrib.sites.models import Site
+from countries import CountryField
 from django.contrib.auth.models import User
-from django.template.defaultfilters import slugify
-from django.utils.translation import ugettext as _
-from django.template import loader, Context
-from django.core.urlresolvers import reverse
+from django.contrib.sites.models import Site
 from django.core.mail import send_mail
-from django.conf import settings
-from userprofile.countries import CountryField
-from django.core.files.storage import default_storage
-if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-    try:
-        from backends.S3Storage import S3Storage
-        storage = S3Storage()
-    except ImportError:
-        raise S3BackendNotFound
-else:
-    storage = default_storage
+from django.core.urlresolvers import reverse
+from django.db import models
+from django.template import loader, Context
+from django.utils.translation import ugettext as _
 import datetime
-import cPickle as pickle
-import base64
-import urllib
 import os.path
-try:
-    from PIL import Image, ImageFilter
-except ImportError:
-    import Image, ImageFilter
+import settings
+import urllib
 
-AVATAR_SIZES = getattr(settings, 'AVATAR_SIZES', (128, 96, 64, 48, 32, 24, 16))
-DEFAULT_AVATAR_SIZE = getattr(settings, 'DEFAULT_AVATAR_SIZE', 96)
-if DEFAULT_AVATAR_SIZE not in AVATAR_SIZES:
-    DEFAULT_AVATAR_SIZE = AVATAR_SIZES[0]
-MIN_AVATAR_SIZE = getattr(settings, 'MIN_AVATAR_SIZE', DEFAULT_AVATAR_SIZE)
-DEFAULT_AVATAR = getattr(settings, 'DEFAULT_AVATAR', os.path.join(settings.MEDIA_ROOT, "userprofile", "generic.jpg"))
-DEFAULT_AVATAR_FOR_INACTIVES_USER = getattr(settings, 'DEFAULT_AVATAR_FOR_INACTIVES_USER', False)
-# params to pass to the save method in PIL (dict with formats (JPEG, PNG, GIF...) as keys)
-# see http://www.pythonware.com/library/pil/handbook/format-jpeg.htm and format-png.htm for options
-SAVE_IMG_PARAMS = getattr(settings, 'SAVE_IMG_PARAMS', {})
+
 
 class BaseProfile(models.Model):
     """
     User profile model
     """
-
     user = models.ForeignKey(User, unique=True)
     creation_date = models.DateTimeField(default=datetime.datetime.now)
     country = CountryField(null=True, blank=True)
@@ -68,7 +42,7 @@ class Avatar(models.Model):
     """
     Avatar model
     """
-    image = models.ImageField(upload_to="avatars/%Y/%b/%d", storage=storage)
+    image = models.ImageField(upload_to="avatars/%Y/%b/%d", storage=settings.MEDIA_STORAGE)
     user = models.ForeignKey(User)
     date = models.DateTimeField(auto_now_add=True)
     valid = models.BooleanField()
@@ -78,35 +52,33 @@ class Avatar(models.Model):
 
     def __unicode__(self):
         return _("%s's Avatar") % self.user
-
-    def delete(self):
-        if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
+    
+    def get_image_path(self):
+        if settings.USE_AWS_STORAGE_BACKEND:
             path = urllib.unquote(self.image.name)
         else:
             path = self.image.path
+        return path        
 
-        base, filename = os.path.split(path)
+    def delete(self):
+        base, filename = os.path.split(self.get_image_path())
         name, extension = os.path.splitext(filename)
-        for key in AVATAR_SIZES:
+        for key in settings.AVATAR_SIZES:
             try:
-                storage.delete(os.path.join(base, "%s.%s%s" % (name, key, extension)))
+                settings.MEDIA_STORAGE.delete(os.path.join(base, "%s.%s%s" % (name, key, extension)))
             except:
                 pass
-
         super(Avatar, self).delete()
 
     def save(self, *args, **kwargs):
+        path = self.get_image_path()
         for avatar in Avatar.objects.filter(user=self.user, valid=self.valid).exclude(id=self.id):
-            if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-                path = urllib.unquote(self.image.name)
-            else:
-                path = avatar.image.path
 
             base, filename = os.path.split(path)
             name, extension = os.path.splitext(filename)
-            for key in AVATAR_SIZES:
+            for key in settings.AVATAR_SIZES:
                 try:
-                    storage.delete(os.path.join(base, "%s.%s%s" % (name, key, extension)))
+                    settings.MEDIA_STORAGE.delete(os.path.join(base, "%s.%s%s" % (name, key, extension)))
                 except:
                     pass
             avatar.delete()
@@ -123,7 +95,7 @@ class EmailValidationManager(models.Manager):
             verify = self.get(key=key)
             if not verify.is_expired():
                 verify.user.email = verify.email
-                if hasattr(settings, "REQUIRE_EMAIL_CONFIRMATION") and settings.REQUIRE_EMAIL_CONFIRMATION:
+                if settings.REQUIRE_EMAIL_CONFIRMATION:
                     verify.user.is_active = True
                 verify.user.save()
                 verify.verified = True
@@ -178,10 +150,7 @@ class EmailValidation(models.Model):
         return _("Email validation process for %(user)s") % { 'user': self.user }
 
     def is_expired(self):
-        if hasattr(settings, 'EMAIL_CONFIRMATION_DELAY'):
-            expiration_delay = settings.EMAIL_CONFIRMATION_DELAY
-        else:
-            expiration_delay = 1
+        expiration_delay = settings.EMAIL_CONFIRMATION_DELAY
         return self.verified or \
             (self.created + datetime.timedelta(days=expiration_delay) <= datetime.datetime.now())
 
@@ -199,12 +168,3 @@ class EmailValidation(models.Model):
         self.created = datetime.datetime.now()
         self.save()
         return True
-
-class UserProfileMediaNotFound(Exception):
-    pass
-
-class S3BackendNotFound(Exception):
-    pass
-
-class GoogleDataAPINotFound(Exception):
-    pass

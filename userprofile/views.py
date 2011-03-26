@@ -1,44 +1,31 @@
-from django.shortcuts import render_to_response
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseRedirect, HttpResponse
-from django.shortcuts import render_to_response, get_object_or_404
-from django.utils.translation import ugettext as _
-from userprofile.forms import AvatarForm, AvatarCropForm, EmailValidationForm, \
-                              ProfileForm, _RegistrationForm, LocationForm, \
-                              ResendEmailValidationForm, PublicFieldsForm
-from userprofile.models import BaseProfile, DEFAULT_AVATAR_SIZE, MIN_AVATAR_SIZE, \
-        SAVE_IMG_PARAMS, DEFAULT_AVATAR
-from django.http import Http404
-from django.core.exceptions import ObjectDoesNotExist
-from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse
-from django.utils import simplejson
-from django.db import models
-from django.contrib.auth.models import User, SiteProfileNotAvailable
-from userprofile.models import EmailValidation, Avatar, UserProfileMediaNotFound, \
-                               GoogleDataAPINotFound, S3BackendNotFound
-from django.template import RequestContext
 from cStringIO import StringIO
-from django.core.files.base import ContentFile
-import urlparse
 from django.conf import settings
-from xml.dom import minidom
-import urllib2
-import random
-import cPickle as pickle
-import base64
-import urllib
-import os
-from userprofile import signals
-import copy
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User, SiteProfileNotAvailable
+from django.core.exceptions import ImproperlyConfigured
+from django.core.files.base import ContentFile
+from django.core.urlresolvers import reverse
+from django.db import models
+from django.http import Http404, HttpResponseRedirect, HttpResponse
+from django.shortcuts import render_to_response, get_object_or_404
+from django.template import RequestContext
+from django.utils import simplejson
 from django.utils.encoding import iri_to_uri
+from django.utils.translation import ugettext as _
+from userprofile import signals
+from userprofile.exceptions import UserProfileMediaNotFound, \
+    GoogleDataAPINotFound
+from userprofile.forms import AvatarForm, AvatarCropForm, EmailValidationForm, \
+    ProfileForm, _RegistrationForm, LocationForm, ResendEmailValidationForm
+from userprofile.models import BaseProfile, EmailValidation, Avatar
+from userprofile.settings import DEFAULT_AVATAR_SIZE, SAVE_IMG_PARAMS, \
+    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA
+from xml.dom import minidom
+import copy
+import os
+import urllib
 
-if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-    from backends.S3Storage import S3Storage
-
-if hasattr(settings, "AVATAR_QUOTA"):
-    from userprofile.uploadhandler import QuotaUploadHandler
 
 try:
     from PIL import Image
@@ -56,7 +43,8 @@ except (ImportError, ImproperlyConfigured):
 if not Profile:
     raise SiteProfileNotAvailable
 
-if not os.path.isdir(os.path.join(settings.MEDIA_ROOT, "userprofile")):
+AVATARS_DIR = getattr(settings, 'AVATARS_DIR', os.path.join(settings.MEDIA_ROOT, "userprofile"))
+if not os.path.isdir(AVATARS_DIR):
     raise UserProfileMediaNotFound
 
 GOOGLE_MAPS_API_KEY = hasattr(settings, "GOOGLE_MAPS_API_KEY") and \
@@ -79,10 +67,10 @@ def fetch_geodata(request, lat, lng):
         url = "http://ws.geonames.org/countrySubdivision?lat=%s&lng=%s" % (lat, lng)
         dom = minidom.parse(urllib.urlopen(url))
         country = dom.getElementsByTagName('countryCode')
-        if len(country) >=1:
+        if len(country) >= 1:
             country = country[0].childNodes[0].data
         region = dom.getElementsByTagName('adminName1')
-        if len(region) >=1:
+        if len(region) >= 1:
             region = region[0].childNodes[0].data
 
         return HttpResponse(simplejson.dumps({'success': True, 'country': country, 'region': region}))
@@ -113,11 +101,11 @@ def overview(request):
         email = request.user.email
         if email: validated = True
 
-    fields = [{ 
-        'name': f.name, 
-        'verbose_name': f.verbose_name, 
+    fields = [{
+        'name': f.name,
+        'verbose_name': f.verbose_name,
         'value': getattr(profile, f.name)
-    } for f in Profile._meta.fields if not (f in BaseProfile._meta.fields or f.name=='id')]
+    } for f in Profile._meta.fields if not (f in BaseProfile._meta.fields or f.name == 'id')]
 
     template = "userprofile/profile/overview.html"
     data = { 'section': 'overview', 'GOOGLE_MAPS_API_KEY': GOOGLE_MAPS_API_KEY,
@@ -193,7 +181,7 @@ def delete(request):
     if request.method == "POST":
         profile, created = Profile.objects.get_or_create(user=request.user)
         old_profile = copy.copy(profile)
-        old_user    = copy.copy(request.user)
+        old_user = copy.copy(request.user)
 
         # Remove the profile and all the information
         Profile.objects.filter(user=request.user).delete()
@@ -221,10 +209,11 @@ def avatarchoose(request):
     """
     Avatar choose
     """
-    profile, created = Profile.objects.get_or_create(user = request.user)
+    Profile.objects.get_or_create(user=request.user)
     images = dict()
 
-    if hasattr(settings, "AVATAR_QUOTA"):
+    if AVATAR_QUOTA:
+        from userprofile.uploadhandler import QuotaUploadHandler
         request.upload_handlers.insert(0, QuotaUploadHandler())
 
     if request.method == "POST":
@@ -232,7 +221,7 @@ def avatarchoose(request):
         if request.POST.get('keyword'):
             keyword = iri_to_uri(request.POST.get('keyword'))
             gd_client = gdata.photos.service.PhotosService()
-            feed = gd_client.SearchCommunityPhotos(query = "%s&thumbsize=72c" % keyword.split(" ")[0], limit='48')
+            feed = gd_client.SearchCommunityPhotos(query="%s&thumbsize=72c" % keyword.split(" ")[0], limit='48')
             for entry in feed.entry:
                 images[entry.media.thumbnail[0].url] = entry.content.src
 
@@ -247,7 +236,6 @@ def avatarchoose(request):
                 else:
                     thumb.thumbnail((480, 480), Image.ANTIALIAS)
                     f = StringIO()
-                    save_img_params = SAVE_IMG_PARAMS.get(thumb.format, {})
                     try:
                         thumb.save(f, thumb.format, **SAVE_IMG_PARAMS.get(thumb.format, {}))
                     except:
@@ -301,15 +289,15 @@ def avatarcrop(request):
             if not (top or left or right or bottom):
                 (width, height) = image.size
                 if width > height:
-                    diff = (width-height) / 2
+                    diff = (width - height) / 2
                     left = diff
-                    right = width-diff
+                    right = width - diff
                     bottom = height
                 else:
-                    diff = (height-width) / 2
+                    diff = (height - width) / 2
                     top = diff
                     right = width
-                    bottom = height-diff
+                    bottom = height - diff
 
             box = [ left, top, right, bottom ]
             image = image.crop(box)
@@ -413,7 +401,7 @@ def email_validation_reset(request):
 
     if request.user.is_authenticated():
         try:
-            resend = EmailValidation.objects.exclude(verified=True).get(user=request.user).resend()
+            EmailValidation.objects.exclude(verified=True).get(user=request.user).resend()
             response = "done"
         except EmailValidation.DoesNotExist:
             response = "failed"
@@ -427,7 +415,7 @@ def email_validation_reset(request):
             if form.is_valid():
                 email = form.cleaned_data.get('email')
                 try:
-                    resend = EmailValidation.objects.exclude(verified=True).get(email=email).resend()
+                    EmailValidation.objects.exclude(verified=True).get(email=email).resend()
                     response = "done"
                 except EmailValidation.DoesNotExist:
                     response = "failed"

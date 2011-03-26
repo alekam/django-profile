@@ -1,34 +1,20 @@
 # coding=UTF-8
-from django.template import Library, Node, Template, TemplateSyntaxError, \
-                            Variable
-from django.utils.translation import ugettext as _
-from userprofile.models import Avatar, AVATAR_SIZES, S3BackendNotFound, \
-        DEFAULT_AVATAR_SIZE, DEFAULT_AVATAR, DEFAULT_AVATAR_FOR_INACTIVES_USER, \
-        SAVE_IMG_PARAMS
-from django.contrib.auth.models import User
-from django.core.files.base import ContentFile
-import urllib
 from cStringIO import StringIO
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.template import Library, Node, TemplateSyntaxError, Variable
+from django.utils.translation import ugettext as _
+from userprofile.models import Avatar
+from userprofile.settings import AVATAR_SIZES, DEFAULT_AVATAR_FOR_INACTIVES_USER, \
+    DEFAULT_AVATAR, SAVE_IMG_PARAMS, DEFAULT_AVATAR_SIZE, MEDIA_STORAGE, \
+    CAN_ENLARGE_AVATAR
+import os
+import urllib
+import urlparse
 try:
     from PIL import Image
 except ImportError:
     import Image
-
-# from PythonMagick import Image
-#from utils.TuxieMagick import Image
-import os
-import urlparse
-import time
-from django.core.files.storage import default_storage
-if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-    try:
-        from backends.S3Storage import S3Storage
-        storage = S3Storage()
-    except ImportError:
-        raise S3BackendNotFound
-else:
-    storage = default_storage
 
 register = Library()
 
@@ -58,12 +44,8 @@ class ResizedThumbnailNode(Node):
             if DEFAULT_AVATAR_FOR_INACTIVES_USER and not user.is_active:
                 raise
             avatar = Avatar.objects.get(user=user, valid=True).image
-            if hasattr(settings, "AWS_SECRET_ACCESS_KEY"):
-                avatar_path = avatar.name
-            else:
-                avatar_path = avatar.path
-
-            if not storage.exists(avatar_path):
+            avatar_path = avatar.get_image_path()
+            if not MEDIA_STORAGE.exists(avatar_path):
                 raise
             base, filename = os.path.split(avatar_path)
             name, extension = os.path.splitext(filename)
@@ -81,10 +63,10 @@ class ResizedThumbnailNode(Node):
         url_tuple = urlparse.urlparse(base_url)
         url = urlparse.urljoin(urllib.unquote(urlparse.urlunparse(url_tuple)), "%s.%s%s" % (name, size, extension))
 
-        if not storage.exists(filename):
+        if not MEDIA_STORAGE.exists(filename):
             thumb = Image.open(ContentFile(avatar.read()))
             img_format = thumb.format
-            if not getattr(settings, 'CAN_ENLARGE_AVATAR', True ) or (thumb.size[0] > size or thumb.size[1] > size or not hasattr(thumb, 'resize')):
+            if not CAN_ENLARGE_AVATAR or (thumb.size[0] > size or thumb.size[1] > size or not hasattr(thumb, 'resize')):
                 thumb.thumbnail((size, size), Image.ANTIALIAS)
             else:
                 thumb = thumb.resize((size, size), Image.BICUBIC)
@@ -94,7 +76,7 @@ class ResizedThumbnailNode(Node):
             except:
                 thumb.save(f, img_format)
             f.seek(0)
-            storage.save(filename, ContentFile(f.read()))
+            MEDIA_STORAGE.save(filename, ContentFile(f.read()))
 
         return url
 

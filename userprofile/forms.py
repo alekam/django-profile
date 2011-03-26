@@ -1,14 +1,14 @@
 from django import forms
-from django.core.exceptions import ObjectDoesNotExist
-from django.core.exceptions import ImproperlyConfigured
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User, SiteProfileNotAvailable
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import models
 from django.utils.translation import ugettext as _
-from django.conf import settings
-from django.contrib.auth.models import User, SiteProfileNotAvailable
-from userprofile.models import EmailValidation, AVATAR_SIZES, DEFAULT_AVATAR_SIZE, MIN_AVATAR_SIZE
-from django.core.files.uploadedfile import SimpleUploadedFile
-import mimetypes, urllib
-from django.contrib.auth.forms import UserCreationForm
+from userprofile.models import EmailValidation
+import mimetypes
+import settings
+import urllib
 
 if not settings.AUTH_PROFILE_MODULE:
     raise SiteProfileNotAvailable
@@ -90,15 +90,15 @@ class AvatarCropForm(forms.Form):
 
     def clean(self):
         if self.cleaned_data.get('right') and self.cleaned_data.get('left') and \
-           int(self.cleaned_data.get('right')) - int(self.cleaned_data.get('left')) < MIN_AVATAR_SIZE:
-            raise forms.ValidationError(_("You must select a portion of the image with a minimum of %(min_avatar_size)dx%(min_avatar_size)d pixels.") % { 'min_avatar_size': MIN_AVATAR_SIZE })
+           int(self.cleaned_data.get('right')) - int(self.cleaned_data.get('left')) < settings.MIN_AVATAR_SIZE:
+            raise forms.ValidationError(_("You must select a portion of the image with a minimum of %(min_avatar_size)dx%(min_avatar_size)d pixels.") % { 'min_avatar_size': settings.MIN_AVATAR_SIZE })
 
         return self.cleaned_data
 
 
 
 class RegistrationForm(UserCreationForm):
-    email = forms.EmailField(required=getattr(settings, "REQUIRE_EMAIL_CONFIRMATION", False), label=_("E-mail address"))
+    email = forms.EmailField(required=settings.REQUIRE_EMAIL_CONFIRMATION, label=_("E-mail address"))
 
     class Meta:
         model = User
@@ -124,7 +124,7 @@ class RegistrationForm(UserCreationForm):
 
     def save(self, *args, **kwargs):
         user = super(RegistrationForm, self).save(commit=False)
-        user.is_active = not getattr(settings, "REQUIRE_EMAIL_CONFIRMATION", False)
+        user.is_active = not settings.REQUIRE_EMAIL_CONFIRMATION
         user.save()
         if self.cleaned_data.get('email'):
             EmailValidation.objects.add(user=user, email=user.email)
