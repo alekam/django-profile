@@ -14,13 +14,13 @@ from django.utils import simplejson
 from django.utils.encoding import iri_to_uri
 from django.utils.translation import ugettext as _
 from userprofile import signals
-from userprofile.exceptions import UserProfileMediaNotFound, \
-    GoogleDataAPINotFound
+from userprofile.exceptions import GoogleDataAPINotFound
 from userprofile.forms import AvatarForm, AvatarCropForm, EmailValidationForm, \
     ProfileForm, _RegistrationForm, LocationForm, ResendEmailValidationForm
 from userprofile.models import BaseProfile, EmailValidation, Avatar
 from userprofile.settings import DEFAULT_AVATAR_SIZE, SAVE_IMG_PARAMS, \
-    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA, USE_AWS_STORAGE_BACKEND
+    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA, USE_AWS_STORAGE_BACKEND, \
+    AVATAR_WEBSEARCH, GOOGLE_MAPS_API_KEY
 from xml.dom import minidom
 import copy
 import os
@@ -42,15 +42,6 @@ except (ImportError, ImproperlyConfigured):
 
 if not Profile:
     raise SiteProfileNotAvailable
-
-AVATARS_DIR = getattr(settings, 'AVATARS_DIR', os.path.join(settings.MEDIA_ROOT, "userprofile"))
-if not os.path.isdir(AVATARS_DIR):
-    raise UserProfileMediaNotFound
-
-GOOGLE_MAPS_API_KEY = hasattr(settings, "GOOGLE_MAPS_API_KEY") and \
-                      settings.GOOGLE_MAPS_API_KEY or None
-AVATAR_WEBSEARCH = hasattr(settings, "AVATAR_WEBSEARCH") and \
-                   settings.AVATAR_WEBSEARCH or None
 
 if AVATAR_WEBSEARCH:
     try:
@@ -402,7 +393,6 @@ def email_validation_reset(request):
     """
     Resend the validation email
     """
-
     if request.user.is_authenticated():
         try:
             EmailValidation.objects.exclude(verified=True).get(user=request.user).resend()
