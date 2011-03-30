@@ -3,13 +3,11 @@ This one collect the application settings
 """
 from django.conf import settings
 from django.core.files.storage import default_storage
-from exceptions import S3BackendNotFound
 import os
 
 
 # path to the default avatar image.
-DEFAULT_AVATAR = getattr(settings, 'DEFAULT_AVATAR', \
-                         os.path.join(settings.MEDIA_ROOT, "userprofile", "generic.jpg"))
+DEFAULT_AVATAR = getattr(settings, 'DEFAULT_AVATAR', os.path.join("userprofile", "generic.jpg"))
 
 DEFAULT_AVATAR_FOR_INACTIVES_USER = getattr(settings, 'DEFAULT_AVATAR_FOR_INACTIVES_USER', False)
 
@@ -25,8 +23,12 @@ AVATAR_WEBSEARCH = getattr(settings, 'AVATAR_WEBSEARCH', False)
 # Max upload size (in MB) of the avatar image.
 AVATAR_QUOTA = getattr(settings, 'AVATAR_QUOTA', None)
 
+# Media storage for static files
+MEDIA_STORAGE = getattr(settings, 'AVATAR_MEDIA_STORAGE', default_storage)
 
-# You need a valid Google Maps API Key so your users can use the Google 
+REMOVE_LOST_AVATAR = getattr(settings, 'REMOVE_LOST_AVATAR', True) 
+
+# You need a valid Google Maps API Key so your users can use the Google
 # Maps positioning functionality. Obtain one for your site name here:
 # http://www.google.com/apis/maps/signup.html
 GOOGLE_MAPS_API_KEY = getattr(settings, 'GOOGLE_MAPS_API_KEY', None)
@@ -35,19 +37,8 @@ GOOGLE_MAPS_API_KEY = getattr(settings, 'GOOGLE_MAPS_API_KEY', None)
 EMAIL_CONFIRMATION_DELAY = getattr(settings, 'EMAIL_CONFIRMATION_DELAY', 1)
 REQUIRE_EMAIL_CONFIRMATION = getattr(settings, 'REQUIRE_EMAIL_CONFIRMATION', False)
 
-
-USE_AWS_STORAGE_BACKEND = hasattr(settings, 'AWS_SECRET_ACCESS_KEY')
-if USE_AWS_STORAGE_BACKEND:
-    try:
-        from backends.S3Storage import S3Storage
-        MEDIA_STORAGE = S3Storage()
-    except ImportError:
-        raise S3BackendNotFound
-else:
-    MEDIA_STORAGE = default_storage
-
 # Specify which set of classes use for html structure of django-profile
-#  - blueprint (the default, for blueprint css framework, full width) 
+#  - blueprint (the default, for blueprint css framework, full width)
 #  - 960gs-12 (for 960.gs css framework, 12 columns, full width)
 #  - 960-gs-16 (for 960.gs, 16 columns, full width)
 #  - 960gs-12-in-9 (for 960.gs css, in a width of 9 columns, given as example)

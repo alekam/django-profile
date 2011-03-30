@@ -1,20 +1,8 @@
 # coding=UTF-8
-from cStringIO import StringIO
-from django.conf import settings
-from django.core.files.base import ContentFile
 from django.template import Library, Node, TemplateSyntaxError, Variable
 from django.utils.translation import ugettext as _
 from userprofile.models import Avatar
-from userprofile.settings import AVATAR_SIZES, DEFAULT_AVATAR_FOR_INACTIVES_USER, \
-    DEFAULT_AVATAR, SAVE_IMG_PARAMS, DEFAULT_AVATAR_SIZE, MEDIA_STORAGE, \
-    CAN_ENLARGE_AVATAR
-import os
-import urllib
-import urlparse
-try:
-    from PIL import Image
-except ImportError:
-    import Image
+from userprofile.settings import AVATAR_SIZES, DEFAULT_AVATAR_SIZE
 
 register = Library()
 
@@ -39,48 +27,9 @@ class ResizedThumbnailNode(Node):
         if not size in AVATAR_SIZES:
             return ''
 
-        try:
-            user = self.user.resolve(context)
-            if DEFAULT_AVATAR_FOR_INACTIVES_USER and not user.is_active:
-                raise
-            avatar = Avatar.objects.get(user=user, valid=True).image
-            avatar_path = avatar.get_image_path()
-            if not MEDIA_STORAGE.exists(avatar_path):
-                raise
-            base, filename = os.path.split(avatar_path)
-            name, extension = os.path.splitext(filename)
-            filename = os.path.join(base, "%s.%s%s" % (name, size, extension))
-            base_url = avatar.url
-
-        except:
-            avatar_path = DEFAULT_AVATAR
-            avatar = open(avatar_path)
-            base, filename = os.path.split(avatar_path)
-            name, extension = os.path.splitext(filename)
-            filename = os.path.join(base, "%s.%s%s" % (name, size, extension))
-            base_url = filename.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
-
-        url_tuple = urlparse.urlparse(base_url)
-        url = urlparse.urljoin(urllib.unquote(urlparse.urlunparse(url_tuple)), "%s.%s%s" % (name, size, extension))
-
-        if not MEDIA_STORAGE.exists(filename):
-            thumb = Image.open(ContentFile(avatar.read()))
-            if thumb.mode != 'RGB':
-                thumb = thumb.convert('RGB')
-            img_format = thumb.format
-            if not CAN_ENLARGE_AVATAR or (thumb.size[0] > size or thumb.size[1] > size or not hasattr(thumb, 'resize')):
-                thumb.thumbnail((size, size), Image.ANTIALIAS)
-            else:
-                thumb = thumb.resize((size, size), Image.BICUBIC)
-            f = StringIO()
-            try:
-                thumb.save(f, img_format, **SAVE_IMG_PARAMS.get(img_format, {}))
-            except:
-                thumb.save(f, img_format)
-            f.seek(0)
-            MEDIA_STORAGE.save(filename, ContentFile(f.read()))
-
-        return url
+        user = self.user.resolve(context)
+        avatar = Avatar.objects.get_for_user(user)
+        return avatar.get_resized_image_url(size)
 
 @register.tag('avatar')
 def Thumbnail(parser, token):

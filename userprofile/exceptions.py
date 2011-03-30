@@ -1,9 +1,6 @@
 """
 Common exceptions
 """
-class S3BackendNotFound(Exception):
-    pass
-
 class UserProfileMediaNotFound(Exception):
     pass
 

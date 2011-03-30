@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, SiteProfileNotAvailable
 from django.core.exceptions import ImproperlyConfigured
-from django.core.files.base import ContentFile
+from django.core.files.base import ContentFile, File
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.http import Http404, HttpResponseRedirect, HttpResponse
@@ -19,8 +19,8 @@ from userprofile.forms import AvatarForm, AvatarCropForm, EmailValidationForm, \
     ProfileForm, _RegistrationForm, LocationForm, ResendEmailValidationForm
 from userprofile.models import BaseProfile, EmailValidation, Avatar
 from userprofile.settings import DEFAULT_AVATAR_SIZE, SAVE_IMG_PARAMS, \
-    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA, USE_AWS_STORAGE_BACKEND, \
-    AVATAR_WEBSEARCH, GOOGLE_MAPS_API_KEY
+    DEFAULT_AVATAR, MIN_AVATAR_SIZE, AVATAR_QUOTA, AVATAR_WEBSEARCH, \
+    GOOGLE_MAPS_API_KEY
 from xml.dom import minidom
 import copy
 import os
@@ -228,16 +228,21 @@ def avatarchoose(request):
                     if thumb.mode != "RGB":
                         thumb = thumb.convert("RGB")
                     thumb.thumbnail((480, 480), Image.ANTIALIAS)
-                    f = StringIO()
+                    f = File(StringIO(), name=image.name)
                     try:
                         thumb.save(f, thumb.format, **SAVE_IMG_PARAMS.get(thumb.format, {}))
                     except:
                         thumb.save(f, thumb.format)
                     f.seek(0)
-                    avatar = Avatar(user=request.user, image="", valid=False)
                     file_ext = image.content_type.split("/")[1] # "image/gif" => "gif"
                     if file_ext == 'pjpeg':
                         file_ext = 'jpeg'
+                    try:
+                        avatar = Avatar.objects.get(user=request.user, valid=False)
+                        avatar.delete_avatar_thumbs()
+                        avatar.image.delete()
+                    except Avatar.DoesNotExist:
+                        avatar = Avatar(user=request.user, image="", valid=False)
                     avatar.image.save("%s.%s" % (request.user.username, file_ext), ContentFile(f.read()))
                     avatar.save()
 
@@ -248,17 +253,20 @@ def avatarchoose(request):
         form = AvatarForm()
 
     if DEFAULT_AVATAR:
-        base, filename = os.path.split(DEFAULT_AVATAR)
-        filename, extension = os.path.splitext(filename)
-        generic = "%s/%s.%d%s" % (base, filename, DEFAULT_AVATAR_SIZE, extension)
-        generic = generic.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
+        generic = Avatar.objects.get_default_avatar().get_resized_image_url(DEFAULT_AVATAR_SIZE)
     else:
         generic = ""
 
     template = "userprofile/avatar/choose.html"
-    data = { 'generic': generic, 'form': form, "images": images,
-             'AVATAR_WEBSEARCH': AVATAR_WEBSEARCH, 'section': 'avatar',
-             'DEFAULT_AVATAR_SIZE': DEFAULT_AVATAR_SIZE, 'MIN_AVATAR_SIZE': MIN_AVATAR_SIZE }
+    data = {
+        'generic': generic,
+        'form': form,
+        "images": images,
+        'AVATAR_WEBSEARCH': AVATAR_WEBSEARCH,
+        'section': 'avatar',
+        'DEFAULT_AVATAR_SIZE': DEFAULT_AVATAR_SIZE,
+        'MIN_AVATAR_SIZE': MIN_AVATAR_SIZE
+    }
     signals.context_signal.send(sender=avatarchoose, request=request, context=data)
     return render_to_response(template, data, context_instance=RequestContext(request))
 
@@ -297,18 +305,20 @@ def avatarcrop(request):
             box = [ left, top, right, bottom ]
             image = image.crop(box)
 
-            if USE_AWS_STORAGE_BACKEND:
-                f = StringIO()
-                image.save(f, image.format)
-                f.seek(0)
-                avatar.image.delete()
-                file_ext = image.content_type.split("/")[1] # "image/gif" => "gif"
-                if file_ext == 'pjpeg':
-                    file_ext = 'jpeg'
-                avatar.image.save("%s.%s" % (request.user.username, file_ext), ContentFile(f.read()))
-            else:
-                image.save(avatar.image.path)
+            for a in Avatar.objects.filter(user=request.user).exclude(id=avatar.id):
+                a.delete()
 
+            f = File(StringIO(), name=avatar.image.name) # need if format is empty
+            image.save(f, image.format)
+            f.seek(0)
+            if hasattr(image, 'content_type'):
+                file_ext = image.content_type.split("/")[1] # "image/gif" => "gif"
+            else:
+                file_ext = os.path.splitext(avatar.image.name)[1][1:]
+            if file_ext == 'pjpeg':
+                file_ext = 'jpeg'
+            avatar.image.delete()
+            avatar.image.save("%s.%s" % (request.user.username, file_ext), ContentFile(f.read()))
             avatar.valid = True
             avatar.save()
             messages.success(request, _("Your new avatar has been saved successfully."), fail_silently=True)
@@ -317,8 +327,13 @@ def avatarcrop(request):
             return signals.last_response(signal_responses) or HttpResponseRedirect(reverse("profile_edit_avatar"))
 
     template = "userprofile/avatar/crop.html"
-    data = { 'section': 'avatar', 'avatar': avatar, 'form': form, \
-        'DEFAULT_AVATAR_SIZE': DEFAULT_AVATAR_SIZE, 'MIN_AVATAR_SIZE': MIN_AVATAR_SIZE }
+    data = {
+        'section': 'avatar',
+        'avatar': avatar,
+        'form': form,
+        'DEFAULT_AVATAR_SIZE': DEFAULT_AVATAR_SIZE,
+        'MIN_AVATAR_SIZE': MIN_AVATAR_SIZE
+    }
     signals.context_signal.send(sender=avatarcrop, request=request, context=data)
     return render_to_response(template, data, context_instance=RequestContext(request))
 
