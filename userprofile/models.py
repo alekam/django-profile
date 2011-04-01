@@ -9,7 +9,7 @@ from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.template import loader, Context
-from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_lazy as _
 import datetime
 import os.path
 import settings
@@ -27,12 +27,14 @@ class BaseProfile(models.Model):
     """
     User profile model
     """
-    user = models.ForeignKey(User, unique=True)
-    creation_date = models.DateTimeField(default=datetime.datetime.now)
-    country = CountryField(null=True, blank=True)
-    latitude = models.DecimalField(max_digits=10, decimal_places=6, blank=True, null=True)
-    longitude = models.DecimalField(max_digits=10, decimal_places=6, blank=True, null=True)
-    location = models.CharField(max_length=255, blank=True, null=True)
+    user = models.ForeignKey(User, unique=True, verbose_name=_('user'))
+    creation_date = models.DateTimeField(_('creation date'), default=datetime.datetime.now)
+    country = CountryField(_('country'), null=True, blank=True)
+    latitude = models.DecimalField(_('latitude'), max_digits=10, decimal_places=6, \
+                                   blank=True, null=True)
+    longitude = models.DecimalField(_('longitude'), max_digits=10, decimal_places=6, \
+                                    blank=True, null=True)
+    location = models.CharField(_('location'), max_length=255, blank=True, null=True)
 
     class Meta:
         abstract = True
@@ -74,15 +76,17 @@ class Avatar(models.Model):
     """
     Avatar model
     """
-    image = models.ImageField(upload_to="avatars/%Y/%b/%d", storage=settings.MEDIA_STORAGE)
-    user = models.ForeignKey(User)
-    date = models.DateTimeField(auto_now_add=True)
-    valid = models.BooleanField()
+    image = models.ImageField(_('image'), upload_to="avatars/%Y/%b/%d", storage=settings.MEDIA_STORAGE)
+    user = models.ForeignKey(User, verbose_name=_('user'))
+    date = models.DateTimeField(_('date'), auto_now_add=True)
+    valid = models.BooleanField(_('valid'))
 
     objects = AvatarManager()
 
     class Meta:
         unique_together = (('user', 'valid'),)
+        verbose_name = _('avatar')
+        verbose_name_plural = _('avatars')
 
     def __unicode__(self):
         return _("%s's Avatar") % self.user
@@ -194,12 +198,16 @@ class EmailValidation(models.Model):
     """
     Email Validation model
     """
-    user = models.ForeignKey(User, unique=True)
-    email = models.EmailField(blank=True)
-    key = models.CharField(max_length=70, unique=True, db_index=True)
-    verified = models.BooleanField(default=False)
-    created = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(User, unique=True, verbose_name=_('user'))
+    email = models.EmailField(_('email'), blank=True)
+    key = models.CharField(_('key'), max_length=70, unique=True, db_index=True)
+    verified = models.BooleanField(_('verified'), default=False)
+    created = models.DateTimeField(_('created'), auto_now_add=True)
     objects = EmailValidationManager()
+
+    class Meta:
+        verbose_name = _('email validation')
+        verbose_name_plural = _('email validations')
 
     def __unicode__(self):
         return _("Email validation process for %(user)s") % { 'user': self.user }
